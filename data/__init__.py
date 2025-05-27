@@ -1,0 +1,1 @@
+from .ColoredMNIST import ColoredMNIST
