@@ -7,13 +7,11 @@ from torch.utils.data import Dataset
 
 class ColoredMNIST(Dataset):
 
-    RED = (1.0, 0.0, 0.0)
-    BLUE = (0.0, 0.0, 1.0)
+    COLOR_ODD = (1.0, 0.0, 0.0)  # Red
+    COLOR_EVEN = (0.0, 0.0, 1.0)  # Blue
 
     def __init__(self, root, alpha_odd, alpha_even, train=True, download=True):
-        self.raw_dataset = datasets.MNIST(
-            root=root, train=train, transform=transforms.ToTensor(), download=download
-        )
+        self.raw_dataset = datasets.MNIST(root=root, train=train, transform=transforms.ToTensor(), download=download)
         self.alpha_odd = alpha_odd
         self.alpha_even = alpha_even
         self.data = self._process()
@@ -39,18 +37,14 @@ class ColoredMNIST(Dataset):
         - Converting each image to RGB format
         - Assigning a binary label: 1 for odd digits, 0 for even
         - Modifying the background color of a subset of images:
-            - alpha_odd% of odd-labeled images get a blue background
-            - alpha_even% of even-labeled images get a red background
+            - alpha_odd% of odd-labeled images get a COLOR_ODD background
+            - alpha_even% of even-labeled images get a COLOR_EVEN background
         """
 
         new_data = []
 
-        odd_indices = [
-            i for i, (_, label) in enumerate(self.raw_dataset) if label % 2 == 1
-        ]
-        even_indices = [
-            i for i, (_, label) in enumerate(self.raw_dataset) if label % 2 == 0
-        ]
+        odd_indices = [i for i, (_, label) in enumerate(self.raw_dataset) if label % 2 == 1]
+        even_indices = [i for i, (_, label) in enumerate(self.raw_dataset) if label % 2 == 0]
 
         num_odd_to_color = int(self.alpha_odd * len(odd_indices))
         num_even_to_color = int(self.alpha_even * len(even_indices))
@@ -63,9 +57,9 @@ class ColoredMNIST(Dataset):
             binary_label = torch.tensor(1 if label % 2 == 1 else 0)
 
             if label % 2 == 1 and i in selected_odd:
-                rgb_img = self._apply_background_color(rgb_img, color=self.RED)  # Red
+                rgb_img = self._apply_background_color(rgb_img, color=self.COLOR_ODD)
             elif label % 2 == 0 and i in selected_even:
-                rgb_img = self._apply_background_color(rgb_img, color=self.BLUE)  # Blue
+                rgb_img = self._apply_background_color(rgb_img, color=self.COLOR_EVEN)
 
             new_data.append((rgb_img, binary_label))
 
