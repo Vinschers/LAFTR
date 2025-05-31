@@ -34,11 +34,13 @@ class AdversaryLossDP(Module):
         """
         K = adv_logits.size(1)
 
-        probs = F.softmax(adv_logits, dim=1)
         one_hot_A = F.one_hot(A, num_classes=K).float()
         counts_A = one_hot_A.sum(dim=0)  # | D_i | for i = 1, ..., K
 
-        errors = torch.norm(probs - one_hot_A, p=1, dim=1)
+        pred = F.softmax(adv_logits, dim=1)
+        # pred = F.one_hot(torch.argmax(pred, dim=1), num_classes=K).float()
+
+        errors = torch.norm(pred - one_hot_A, p=1, dim=1)
 
         loss = one_hot_A.T @ errors  # K x 1 vector where each element is the sum of errors for 1, ..., K
         loss[loss > 0] /= counts_A[loss > 0]  # Avoid division by 0
@@ -88,12 +90,14 @@ class AdversaryLossEO(Module):
         joint_AY = one_hot_A.unsqueeze(2) * one_hot_Y.unsqueeze(1)
         one_hot_AY = joint_AY.reshape(-1, K * C)  # Now, it is a 2D matrix that corresponds to the combinations of A and Y
 
-        probs = F.softmax(adv_logits, dim=1)
-        counts_AY = one_hot_AY.sum(dim=0)  # | D_i^j | for i = 1, ..., K and j = 1, ..., C
+        pred = F.softmax(adv_logits, dim=1)
+        # pred = F.one_hot(torch.argmax(pred, dim=1), num_classes=K).float()
 
-        errors = torch.norm(probs - one_hot_A, p=1, dim=1)  # Vector the size of the batch
+        errors = torch.norm(pred - one_hot_A, p=1, dim=1)  # Vector the size of the batch
 
         loss = one_hot_AY.T @ errors  # KC x 1 vector where each element is the sum of errors for combinations of A and Y
+
+        counts_AY = one_hot_AY.sum(dim=0)  # | D_i^j | for i = 1, ..., K and j = 1, ..., C
         loss[loss > 0] /= counts_AY[loss > 0]  # Avoid division by 0
 
         return loss.sum() - C
