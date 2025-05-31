@@ -3,16 +3,13 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class Classifier(nn.Module):
-    def __init__(self, latent_dim, hidden_dims=(64, 32)):
+    def __init__(self, latent_dim, hidden_dim=64):
         super().__init__()
-        in_dim = latent_dim
-        h1, h2 = hidden_dims
 
         self.net = nn.Sequential(
-            nn.Linear(in_dim, h1), nn.ReLU(),
-            nn.Linear(h1,    h2), nn.ReLU(),
-            nn.Linear(h2, 1)
+            nn.Linear(latent_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
         )
 
     def forward(self, z):
-        return torch.sigmoid(self.net(z).squeeze(-1))
+        return self.net(z).squeeze(-1) # output between (-inf, +inf)
