@@ -1,1 +1,2 @@
-from .AdversaryLoss import AdversaryLossDP
+from .CombinedLoss import CombinedLoss
+from .AdversaryLoss import AdversaryLossDP, AdversaryLossEO
