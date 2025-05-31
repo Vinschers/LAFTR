@@ -18,5 +18,6 @@ LAFTR/
 │
 ├── LAFTR.ipynb                   # Main Jupyter notebook for training/testing
 ├── .gitignore                    # Git ignore rules
-└── LICENSE                       # License for the project 
+└── LICENSE                       # License for the project
+└── train.py                      # Training functions for the DP and EO models
 ```

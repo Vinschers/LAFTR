@@ -56,13 +56,13 @@ class AdversaryLossEO(Module):
         loss = ∑_{i=1}^K ∑_{j=1}^C (1/|D_i^j|) · ∑_{n: A_n=i, Y_n=j} ‖softmax(adv_logits_n) − one_hot(A_n)‖₁ − C
     where:
       - A is a tensor of sensitive attribute labels in {0, …, K−1},
-      - y_pred is the tensor of predicted class labels in {0, …, C−1},
+      - y_true is the tensor of true class labels in {0, …, C−1},
       - adv_logits are the adversary’s raw logits of shape (N, K),
       - D_i^j = {n ∣ A_n = i and Y_n = j},
       - and C is the number of predicted classes.
     """
 
-    def forward(self, A: Tensor, y_pred: Tensor, adv_logits: Tensor) -> Tensor:
+    def forward(self, A: Tensor, y_true: Tensor, adv_logits: Tensor) -> Tensor:
         """
         Compute the equalized‐odds adversarial loss.
 
@@ -70,8 +70,8 @@ class AdversaryLossEO(Module):
         ----------
         A : Tensor
             Sensitive attribute labels, an integer tensor of shape (N,).
-        y_pred : Tensor
-            Predicted class labels, an integer tensor of shape (N,).
+        y_true : Tensor
+            True class labels, an integer tensor of shape (N,).
         adv_logits : Tensor
             Adversary raw logits before softmax, a tensor of shape (N, K).
 
@@ -81,10 +81,10 @@ class AdversaryLossEO(Module):
             Scalar tensor representing the equalized‐odds adversarial loss.
         """
         K = adv_logits.size(1)
-        C = int(y_pred.max().item()) + 1
+        C = int(y_true.max().item()) + 1
 
         one_hot_A = F.one_hot(A, num_classes=K).float()
-        one_hot_Y = F.one_hot(y_pred, num_classes=C).float()
+        one_hot_Y = F.one_hot(y_true, num_classes=C).float()
 
         # One-hot 3D matrix. if element (i, j, k) = 1, then the i-th element from the batch has A = j and Y = k
         joint_AY = one_hot_A.unsqueeze(2) * one_hot_Y.unsqueeze(1)
