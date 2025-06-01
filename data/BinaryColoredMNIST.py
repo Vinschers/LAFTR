@@ -5,7 +5,7 @@ from torchvision import datasets, transforms
 from torch.utils.data import Dataset
 
 
-class ColoredMNIST(Dataset):
+class BinaryColoredMNIST(Dataset):
 
     COLOR_ODD = (1.0, 0.0, 0.0)  # Red
     COLOR_EVEN = (0.0, 0.0, 1.0)  # Blue
