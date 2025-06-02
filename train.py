@@ -4,7 +4,7 @@ import torch
 from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.nn import Module, ModuleList
-from torch.optim import Optimizer, Adam
+from torch.optim import Optimizer
 import torch.nn.functional as F
 
 from models import Encoder, Classifier
@@ -219,7 +219,9 @@ def _train_epoch(
         y_true = y_true.to(device)
         batch_size = x.size(0)
 
-        loss_enc_class = _train_enc_class(x, a_true, y_true, C, encoder, classifier, adversaries, criterion_enc_class, optimizer_enc_class, criterion_adv )
+        loss_enc_class = _train_enc_class(
+            x, a_true, y_true, C, encoder, classifier, adversaries, criterion_enc_class, optimizer_enc_class, criterion_adv
+        )
         loss_adv = _train_adversaries(x, a_true, y_true, C, encoder, classifier, adversaries, optimizers_adv, criterion_adv)
 
         loss_enc_class_total += loss_enc_class * batch_size
@@ -233,9 +235,10 @@ def train_laftr(
     encoder: Encoder,
     classifier: Classifier,
     adversaries: ModuleList,
+    optimizer_enc_class: Optimizer,
+    optimizers_adv: Sequence[Optimizer],
     train_loader: DataLoader,
     gamma: float = 1.0,
-    learning_rate: float = 1e-3,
     epochs: int = 12,
     device: torch.device = torch.device("cpu"),
 ):
@@ -250,12 +253,14 @@ def train_laftr(
         Neural network mapping z -> y_pred.
     adversaries : ModuleList
         List of C adversary networks, one per value of y_true.
+    optimizer_enc_class : Optimizer
+        Optimizer for encoder and classifier parameters.
+    optimizers_adv : Sequence[Optimizer]
+        Sequence of optimizers corresponding to each adversary in `adversaries`.
     train_loader : DataLoader
-        DataLoader yielding (x, a_true, y_true) batches.
+        DataLoader yielding batches of (x, a_true, y_true).
     gamma : float, default=1.0
         Weight on the adversarial fairness penalty in the encoder+classifier loss.
-    learning_rate : float, default=1e-3
-        Learning rate for the encoder+classifier optimizer.
     epochs : int, default=12
         Number of full passes through `train_loader`.
     device : torch.device, default=torch.device("cpu")
@@ -271,9 +276,6 @@ def train_laftr(
     criterion_enc_class = CombinedLoss(gamma)
     criterion_adv = AdversaryLoss()
 
-    optimizer_enc_class = Adam(list(encoder.parameters()) + list(classifier.parameters()), lr=learning_rate)
-    optimizers_adv = [Adam(adv.parameters(), lr=1e-3) for adv in adversaries]
-
     losses_enc_class = []
     losses_adv = []
 
@@ -284,5 +286,7 @@ def train_laftr(
 
         losses_enc_class.append(loss_enc_class)
         losses_adv.append(loss_adv)
+
+        print(loss_enc_class, loss_adv)
 
     return losses_enc_class, losses_adv
