@@ -5,22 +5,28 @@ from torch import Tensor
 from torch.utils.data import DataLoader
 from torch.nn import Module, ModuleList
 from torch.optim import Optimizer
-import torch.nn.functional as F
 
 from models import Encoder, Classifier
 from losses import CombinedLoss, AdversaryLoss
+
+
+def _to_pred_matrix(pred: Tensor):
+    if pred.dim() == 2:
+        return pred
+
+    return torch.stack((1 - pred, pred), dim=1)
 
 
 def _train_enc_class(
     x: Tensor,
     a_true: Tensor,
     y_true: Tensor,
-    C: int,
     encoder: Encoder,
     classifier: Classifier,
     adversaries: ModuleList,
     criterion_enc_class: Module,
     optimizer_enc_class: Optimizer,
+    criterion_class: Module,
     criterion_adv: Module,
 ):
     """
@@ -34,8 +40,6 @@ def _train_enc_class(
         True sensitive-attribute labels of shape [batch_size].
     y_true : Tensor
         True prediction labels of shape [batch_size], in {0,...,C-1}.
-    C : int
-        Number of distinct prediction classes.
     encoder : Encoder
         Neural network mapping x -> z (representation).
     classifier : Classifier
@@ -46,6 +50,8 @@ def _train_enc_class(
         Combined loss function that accepts (loss_class, loss_adv) and returns a scalar.
     optimizer_enc_class : Optimizer
         Optimizer for encoder and classifier parameters.
+    criterion_class : Module
+        Classification loss function computing loss given (y_pred, y_true).
     criterion_adv : Module
         Adversarial loss function computing fairness penalty given (a_pred, a_true).
 
@@ -54,12 +60,14 @@ def _train_enc_class(
     float
         The scalar encoder+classifier loss (classification + γ·fairness) for this batch.
     """
+    C = len(adversaries)
+
     # Fix adversaries
     for adv in adversaries:
-        adv.requires_grad_(False)
+        adv.eval()
 
-    encoder.requires_grad_(True)
-    classifier.requires_grad_(True)
+    encoder.train()
+    classifier.train()
 
     optimizer_enc_class.zero_grad()
 
@@ -76,11 +84,11 @@ def _train_enc_class(
             a_y = a_true[mask_y]
             adv = adversaries[y]
 
-            a_pred = adv(z_y)
+            a_pred = _to_pred_matrix(adv(z_y))
 
             loss_adv += criterion_adv(a_pred, a_y)
 
-    loss_class = F.cross_entropy(y_pred, y_true)
+    loss_class = criterion_class(y_pred, y_true.float())
 
     loss_enc_class = criterion_enc_class(loss_class, loss_adv)
     loss_enc_class.backward()
@@ -93,7 +101,6 @@ def _train_adversaries(
     x: Tensor,
     a_true: Tensor,
     y_true: Tensor,
-    C: int,
     encoder: Encoder,
     classifier: Classifier,
     adversaries: ModuleList,
@@ -111,8 +118,6 @@ def _train_adversaries(
         True sensitive-attribute labels of shape [batch_size].
     y_true : Tensor
         True prediction labels of shape [batch_size], in {0,...,C-1}.
-    C : int
-        Number of distinct prediction classes.
     encoder : Encoder
         Neural network mapping x -> z. Its parameters are frozen during this step.
     classifier : Classifier
@@ -129,14 +134,17 @@ def _train_adversaries(
     float
         The sum of each adversary’s loss (mean over its subset) for this batch.
     """
+    C = len(adversaries)
+
     # Fix encoder and classifier
-    encoder.requires_grad_(False)
-    classifier.requires_grad_(False)
+    encoder.eval()
+    classifier.eval()
 
     for adv in adversaries:
-        adv.requires_grad_(True)
+        adv.train()
 
-    z = encoder(x)
+    with torch.no_grad():
+        z = encoder(x)
 
     adv_loss = 0
 
@@ -151,7 +159,7 @@ def _train_adversaries(
             z_y = z[mask_y]
             a_y = a_true[mask_y]
 
-            a_pred = adv(z_y)
+            a_pred = _to_pred_matrix(adv(z_y))
 
             loss_adv_y = criterion_adv(a_pred, a_y)
             loss_adv_y.backward()
@@ -169,6 +177,7 @@ def _train_epoch(
     train_loader: DataLoader,
     criterion_enc_class: Module,
     optimizer_enc_class: Optimizer,
+    criterion_class: Module,
     criterion_adv: Module,
     optimizers_adv: Sequence[Optimizer],
     device: torch.device = torch.device("cpu"),
@@ -190,6 +199,8 @@ def _train_epoch(
         Combined loss function for encoder+classifier.
     optimizer_enc_class : Optimizer
         Optimizer for encoder and classifier parameters.
+    criterion_class : Module
+        Classification loss function computing loss given (y_pred, y_true).
     criterion_adv : Module
         Adversarial loss function computing fairness penalty given (a_pred, a_true).
     optimizers_adv : Sequence[Optimizer]
@@ -202,16 +213,9 @@ def _train_epoch(
     tuple of float
         (average encoder+classifier loss over epoch, average adversary loss over epoch).
     """
-    encoder.train()
-    classifier.train()
-    for adv in adversaries:
-        adv.train()
-
     loss_enc_class_total = 0
     loss_adv_total = 0
     n = 0
-
-    C = len(adversaries)
 
     for x, a_true, y_true in train_loader:
         x = x.to(device)
@@ -220,9 +224,9 @@ def _train_epoch(
         batch_size = x.size(0)
 
         loss_enc_class = _train_enc_class(
-            x, a_true, y_true, C, encoder, classifier, adversaries, criterion_enc_class, optimizer_enc_class, criterion_adv
+            x, a_true, y_true, encoder, classifier, adversaries, criterion_enc_class, optimizer_enc_class, criterion_class, criterion_adv
         )
-        loss_adv = _train_adversaries(x, a_true, y_true, C, encoder, classifier, adversaries, optimizers_adv, criterion_adv)
+        loss_adv = _train_adversaries(x, a_true, y_true, encoder, classifier, adversaries, optimizers_adv, criterion_adv)
 
         loss_enc_class_total += loss_enc_class * batch_size
         loss_adv_total += loss_adv * batch_size
@@ -235,12 +239,14 @@ def train_laftr(
     encoder: Encoder,
     classifier: Classifier,
     adversaries: ModuleList,
+    criterion_class: Module,
     optimizer_enc_class: Optimizer,
     optimizers_adv: Sequence[Optimizer],
     train_loader: DataLoader,
     gamma: float = 1.0,
     epochs: int = 12,
     device: torch.device = torch.device("cpu"),
+    verbose: bool = False,
 ):
     """
     Train a LAFTR model using adversarial DP/EO criteria over multiple epochs.
@@ -253,6 +259,8 @@ def train_laftr(
         Neural network mapping z -> y_pred.
     adversaries : ModuleList
         List of C adversary networks, one per value of y_true.
+    criterion_class : Module
+        Classification loss function computing loss given (y_pred, y_true).
     optimizer_enc_class : Optimizer
         Optimizer for encoder and classifier parameters.
     optimizers_adv : Sequence[Optimizer]
@@ -265,6 +273,8 @@ def train_laftr(
         Number of full passes through `train_loader`.
     device : torch.device, default=torch.device("cpu")
         Device on which to perform computations.
+    verbose : bool, default=False
+        Print progress information.
 
     Returns
     -------
@@ -279,14 +289,15 @@ def train_laftr(
     losses_enc_class = []
     losses_adv = []
 
-    for _ in range(epochs):
+    for e in range(epochs):
         loss_enc_class, loss_adv = _train_epoch(
-            encoder, classifier, adversaries, train_loader, criterion_enc_class, optimizer_enc_class, criterion_adv, optimizers_adv, device
+            encoder, classifier, adversaries, train_loader, criterion_enc_class, optimizer_enc_class, criterion_class, criterion_adv, optimizers_adv, device
         )
 
         losses_enc_class.append(loss_enc_class)
         losses_adv.append(loss_adv)
 
-        print(loss_enc_class, loss_adv)
+        if verbose:
+            print(f"Epoch {e} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
 
     return losses_enc_class, losses_adv
