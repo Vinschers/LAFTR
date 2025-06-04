@@ -310,7 +310,7 @@ def train_laftr(
         losses_adv.append(loss_adv)
 
         if verbose:
-            print(f"Epoch {e} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+            print(f"Epoch {e + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
 
     encoder.eval()
     classifier.eval()

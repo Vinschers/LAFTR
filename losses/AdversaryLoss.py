@@ -32,13 +32,14 @@ class AdversaryLoss(Module):
         Tensor
             Scalar tensor representing the adversarial loss.
         """
-        K = adv_logits.size(1)
+        K = adv_logits.size(1) # A = {0, 1} -> K=2
 
-        one_hot_A = F.one_hot(A, num_classes=K).float()
-        counts_A = torch.bincount(A, minlength=K).float()  # | D_i | for i = 1, ..., K
+        one_hot_A = F.one_hot(A, num_classes=K).float() # [[0, 1], [1,0], [1, 0]] (N, K)
+        counts_A = torch.bincount(A, minlength=K).float()  # | D_i | for i = 1, ..., K ([2, 1] (1, K)))
 
+        # [[0.1, 0.9], [0.95, 0.05], [0.7, 0.3]] (N, K) -> h(z) (prediction)
         pred = F.softmax(adv_logits, dim=1)
-        errors = torch.norm(pred - one_hot_A, p=1, dim=1) # L1-norm
+        errors = torch.norm(pred - one_hot_A, p=1, dim=1) # L1-norm -> ||[[0.1, 0.9], [0.95, 0.05], [0.7, 0.3]] - [[0, 1], [1,0], [1, 0]]||
 
         loss = torch.zeros(K, device=adv_logits.device)
 
