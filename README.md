@@ -8,7 +8,7 @@ A fairness-aware representation learning project using modified MNIST datasets.
 LAFTR/
 ├── data/                         # Data-related modules and resources
 │   ├── mnist_data/               # Downloaded MNIST dataset
-│   └── data_modifications.py     # Custom dataset transformations (ColoredMNIST)
+│   └── BinaryColoredMNIST.py     # Custom dataset transformations (BinaryColoredMNIST)
 │
 ├── losses/                       # Custom loss functions
 │

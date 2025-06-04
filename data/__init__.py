@@ -1,1 +1,1 @@
-from .ColoredMNIST import ColoredMNIST
+from .BinaryColoredMNIST import BinaryColoredMNIST
