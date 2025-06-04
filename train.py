@@ -1,4 +1,4 @@
-from typing import Sequence
+from typing import Sequence, Union
 
 import torch
 from torch import Tensor
@@ -6,7 +6,9 @@ from torch.utils.data import DataLoader
 from torch.nn import Module, ModuleList
 from torch.optim import Optimizer
 
-from models import Encoder, Classifier
+from tqdm.notebook import tqdm
+
+from models import _BaseEncoder, Classifier
 from losses import CombinedLoss, AdversaryLoss
 
 
@@ -21,7 +23,7 @@ def _train_enc_class(
     x: Tensor,
     a_true: Tensor,
     y_true: Tensor,
-    encoder: Encoder,
+    encoder: _BaseEncoder,
     classifier: Classifier,
     adversaries: ModuleList,
     criterion_enc_class: Module,
@@ -88,7 +90,7 @@ def _train_enc_class(
 
             loss_adv += criterion_adv(a_pred, a_y)
 
-    loss_class = criterion_class(y_pred, y_true.float())
+    loss_class = criterion_class(y_pred, y_true)
 
     loss_enc_class = criterion_enc_class(loss_class, loss_adv)
     loss_enc_class.backward()
@@ -101,7 +103,7 @@ def _train_adversaries(
     x: Tensor,
     a_true: Tensor,
     y_true: Tensor,
-    encoder: Encoder,
+    encoder: _BaseEncoder,
     classifier: Classifier,
     adversaries: ModuleList,
     optimizers_adv: Sequence[Optimizer],
@@ -171,10 +173,10 @@ def _train_adversaries(
 
 
 def _train_epoch(
-    encoder: Encoder,
+    encoder: _BaseEncoder,
     classifier: Classifier,
     adversaries: ModuleList,
-    train_loader: DataLoader,
+    train_loader: Union[DataLoader, tqdm],
     criterion_enc_class: Module,
     optimizer_enc_class: Optimizer,
     criterion_class: Module,
@@ -236,13 +238,13 @@ def _train_epoch(
 
 
 def train_laftr(
-    encoder: Encoder,
+    encoder: _BaseEncoder,
     classifier: Classifier,
     adversaries: ModuleList,
     criterion_class: Module,
     optimizer_enc_class: Optimizer,
     optimizers_adv: Sequence[Optimizer],
-    train_loader: DataLoader,
+    train_loader: Union[DataLoader, tqdm],
     gamma: float = 1.0,
     epochs: int = 12,
     device: torch.device = torch.device("cpu"),
@@ -290,8 +292,18 @@ def train_laftr(
     losses_adv = []
 
     for e in range(epochs):
+        if verbose and not isinstance(train_loader, tqdm):
+            loader = tqdm(
+                train_loader,
+                desc=f"Epoch {e+1}/{epochs}",
+                unit="batch",
+                leave=False
+            )
+        else:
+            loader = train_loader
+
         loss_enc_class, loss_adv = _train_epoch(
-            encoder, classifier, adversaries, train_loader, criterion_enc_class, optimizer_enc_class, criterion_class, criterion_adv, optimizers_adv, device
+            encoder, classifier, adversaries, loader, criterion_enc_class, optimizer_enc_class, criterion_class, criterion_adv, optimizers_adv, device
         )
 
         losses_enc_class.append(loss_enc_class)
@@ -299,5 +311,10 @@ def train_laftr(
 
         if verbose:
             print(f"Epoch {e} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+
+    encoder.eval()
+    classifier.eval()
+    for adv in adversaries:
+        adv.eval()
 
     return losses_enc_class, losses_adv

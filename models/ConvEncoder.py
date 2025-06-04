@@ -2,7 +2,7 @@ from typing import Union
 import torch
 import torch.nn as nn
 
-import _BaseEncoder
+from ._BaseEncoder import _BaseEncoder
 
 
 class ConvEncoder(_BaseEncoder):
@@ -10,7 +10,7 @@ class ConvEncoder(_BaseEncoder):
     def _set_net(
         self,
         latent_dim: int,
-        image_dim: Union[int, tuple[int]] = 28,
+        image_dim: Union[int, tuple[int, int]] = 28,
         in_channels: int = 3
     ):
         """

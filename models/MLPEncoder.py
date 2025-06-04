@@ -1,5 +1,5 @@
 import torch.nn as nn
-import _BaseEncoder
+from ._BaseEncoder import _BaseEncoder
 
 
 class MLPEncoder(_BaseEncoder):
@@ -8,7 +8,7 @@ class MLPEncoder(_BaseEncoder):
         self,
         latent_dim: int,
         in_dim: int = 28 * 28 * 3,
-        output_neurons: tuple[int] = (256, 128) # Hidden layer sizes
+        output_neurons: tuple[int, ...] = (256, 128) # Hidden layer sizes
     ):
         """
         Implements a multi-layer perceptron (MLP) encoder that maps input data to a latent representation.
@@ -22,7 +22,8 @@ class MLPEncoder(_BaseEncoder):
 
         dims = (in_dim,) + output_neurons
 
-        layers = [nn.Flatten()]
+        layers = []
+        layers.append(nn.Flatten())
 
         for i in range(len(dims) - 1):
             layers.append(nn.Linear(dims[i], dims[i + 1]))

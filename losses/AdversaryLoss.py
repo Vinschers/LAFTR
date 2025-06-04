@@ -5,7 +5,7 @@ from torch.nn import Module, functional as F
 
 class AdversaryLoss(Module):
     """
-    Adversarial loss for demographic parity.
+    Adversarial loss for demographic parity and equalized odds.
 
     This module computes the demographic‐parity adversarial loss:
         loss = ∑_{i=1}^K (1/|D_i|) · ∑_{n: A_n = i} ‖softmax(adv_logits_n) − one_hot(A_n)‖₁ − 1
@@ -18,7 +18,7 @@ class AdversaryLoss(Module):
 
     def forward(self, adv_logits: Tensor, A: Tensor) -> Tensor:
         """
-        Compute the demographic‐parity adversarial loss.
+        Compute the DP or EO adversarial loss.
 
         Parameters
         ----------
@@ -30,19 +30,19 @@ class AdversaryLoss(Module):
         Returns
         -------
         Tensor
-            Scalar tensor representing the demographic‐parity adversarial loss.
+            Scalar tensor representing the adversarial loss.
         """
         K = adv_logits.size(1)
 
         one_hot_A = F.one_hot(A, num_classes=K).float()
-        counts_A = one_hot_A.sum(dim=0)  # | D_i | for i = 1, ..., K
+        counts_A = torch.bincount(A, minlength=K).float()  # | D_i | for i = 1, ..., K
 
         pred = F.softmax(adv_logits, dim=1)
-        # pred = F.one_hot(torch.argmax(pred, dim=1), num_classes=K).float()
+        errors = torch.norm(pred - one_hot_A, p=1, dim=1) # L1-norm
 
-        errors = torch.norm(pred - one_hot_A, p=1, dim=1)
+        loss = torch.zeros(K, device=adv_logits.device)
 
-        loss = one_hot_A.T @ errors  # K x 1 vector where each element is the sum of errors for 1, ..., K
-        loss[loss > 0] /= counts_A[loss > 0]  # Avoid division by 0
+        loss = loss.index_add(0, A, errors)  # K x 1 vector where each element is the sum of errors for 1, ..., K
+        loss[counts_A > 0] /= counts_A[counts_A > 0]  # Avoid division by 0
 
-        return loss.sum()  # Negative of objective function without constant terms
+        return loss.sum() - 1  # Negative of objective function without constant terms
