@@ -1,15 +1,22 @@
-import torch  
 import torch.nn as nn
-import torch.nn.functional as F
+
 
 class Classifier(nn.Module):
-    def __init__(self, latent_dim, hidden_dim=64):
+    """
+    A simple neural network classifier for predicting task labels from latent representations.
+
+    Args:
+        latent_dim (int): Dimensionality of the input latent representation z.
+        hidden_dim (int): Number of units in the hidden layer.
+        C (int): Number of output classes. Tipically set to 2 for binary logits.
+    """
+
+    def __init__(self, latent_dim: int = 16, hidden_dim: int = 64, C: int = 2):
         super().__init__()
 
         self.net = nn.Sequential(
-            nn.Linear(latent_dim, hidden_dim), nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
+            nn.Linear(latent_dim, hidden_dim), nn.ReLU(), nn.Linear(hidden_dim, C)
         )
 
     def forward(self, z):
-        return self.net(z).squeeze(-1) # output between (-inf, +inf)
+        return self.net(z).squeeze(-1)  # Squeeze is used to handle shape (batch_size, 1) -> (batch_size)
