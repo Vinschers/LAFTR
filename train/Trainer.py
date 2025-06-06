@@ -80,13 +80,7 @@ class Trainer:
 
         self.encoder = encoder.to(self.device)
         self.classifier = classifier.to(self.device)
-        self.adversary = adversary
-
-        if self.dp:
-            self.adversary.to(self.device)
-        else:
-            for adv in self.adversary:  # type: ignore[operator]
-                adv.to(self.device)
+        self.adversary = adversary.to(self.device)
 
     def pred_adversary(self, z: Tensor, y_true: Tensor):
         """
@@ -357,17 +351,9 @@ class Trainer:
             self.classifier.eval()
 
         if train_adversary:
-            if self.dp:
-                self.adversary.train()
-            else:
-                for adv in self.adversary:  # type: ignore[operator]
-                    adv.train()
+            self.adversary.train()
         else:
-            if self.dp:
-                self.adversary.eval()
-            else:
-                for adv in self.adversary:  # type: ignore[operator]
-                    adv.eval()
+            self.adversary.eval()
 
     def _reset_models(self):
         """
@@ -383,15 +369,9 @@ class Trainer:
             if hasattr(m, "reset_parameters"):
                 m.reset_parameters()  # type: ignore[operator]
 
-        if self.dp:
-            for m in self.adversary.modules():
-                if hasattr(m, "reset_parameters"):
-                    m.reset_parameters()  # type: ignore[operator]
-        else:
-            for adv in self.adversary:  # type: ignore[operator]
-                for m in adv.modules():
-                    if hasattr(m, "reset_parameters"):
-                        m.reset_parameters()  # type: ignore[operator]
+        for m in self.adversary.modules():
+            if hasattr(m, "reset_parameters"):
+                m.reset_parameters()  # type: ignore[operator]
 
     def _to_pred_matrix(self, pred: Tensor):
         if pred.dim() == 2:
