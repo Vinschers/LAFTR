@@ -34,7 +34,7 @@ class ConvEncoder(_BaseEncoder):
 
         # Define the convolutional feature extractor
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels=6, kernel_size=5),
+            nn.Conv2d(in_channels, out_channels=2, kernel_size=5),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=2),
         )
@@ -47,8 +47,11 @@ class ConvEncoder(_BaseEncoder):
             flatten_dim = out.view(1, -1).shape[1]
 
         # Compose final encoder: conv -> flatten -> linear projection to latent_dim
-        self.net = nn.Sequential(
+        second_conv = nn.Sequential(
             self.conv,
+            nn.Conv2d(2, latent_dim, kernel_size=1),
+            nn.LeakyReLU(),
+            nn.AdaptiveAvgPool2d((1, 1)), # Outputs a 1 x 1 x latent_dim
             nn.Flatten(),
-            nn.Linear(flatten_dim, latent_dim)
         )
+        self.net = second_conv

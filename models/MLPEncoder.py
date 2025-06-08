@@ -20,15 +20,16 @@ class MLPEncoder(_BaseEncoder):
             output_neurons (tuple[int]): Sizes of the hidden layers in the MLP.
         """
 
-        dims = (in_dim,) + output_neurons
-
         layers = []
         layers.append(nn.Flatten())
 
-        for i in range(len(dims) - 1):
-            layers.append(nn.Linear(dims[i], dims[i + 1]))
-            layers.append(nn.ReLU())
-
-        layers.append(nn.Linear(output_neurons[-1], latent_dim))
+        if len(output_neurons) == 0:
+            layers.append(nn.Linear(in_dim, latent_dim))
+        else:
+            dims = (in_dim,) + output_neurons
+            for i in range(len(dims) - 1):
+                layers.append(nn.Linear(dims[i], dims[i + 1]))
+                layers.append(nn.ReLU())
+            layers.append(nn.Linear(output_neurons[-1], latent_dim))
 
         self.net = nn.Sequential(*layers)
