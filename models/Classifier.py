@@ -17,4 +17,4 @@ class Classifier(nn.Module):
         self.net = nn.Linear(latent_dim, 1) # A single linear layer, no hidden layers or ReLU
 
     def forward(self, z):
-        return self.net(z).squeeze(-1)  # Squeeze is used to handle shape (batch_size, 1) -> (batch_size)
+        return self.net(z)
