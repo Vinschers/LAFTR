@@ -1,23 +1,12 @@
+from typing import Sized, Any, cast
+from abc import ABC, abstractmethod
+
 import torch
+from torch import Tensor
 from torch.utils.data import Dataset
 
 
-def _compute_bayes_theorem(likelihood, prior, evidence):
-    """
-    Computes the posterior probability P(A|Y) using Bayes' theorem.
-
-    Args:
-        likelihood (Tensor or float): P(Y|A).
-        prior (Tensor or float): P(A).
-        evidence (Tensor or float): P(Y).
-
-    Returns:
-        Tensor or float: Posterior probability P(A|Y).
-    """
-    return (likelihood * prior) / evidence
-
-
-class BiasInjector(Dataset):
+class BiasedDataset(Dataset, ABC):
     """
     Wrap any dataset to inject a spurious attribute A via Bayes' rule,
     pre-applying the bias so __getitem__ is just a tensor lookup.
@@ -41,18 +30,25 @@ class BiasInjector(Dataset):
         Device on which to store all tensors (priors, images, labels, attributes).
     """
 
-    def __init__(self, base_dataset, C: int, p_y_a, p_a, bias_fn, seed=None, device: torch.device = torch.device("cpu")):
+    def __init__(
+        self,
+        base_dataset: Dataset,
+        C: int,
+        p_y_a: Tensor | list[list[float]],
+        p_a: Tensor | list[float],
+        seed: int | None = None,
+        device: torch.device = torch.device("cpu"),
+    ):
         super().__init__()
         self.base = base_dataset
         self.C = C
-        self.bias_fn = bias_fn
         self.device = device
 
         self._prepare_priors(p_y_a, p_a)
         self._extract_labels()
         self._compute_p_y()
 
-        self.p_a_y = _compute_bayes_theorem(self.p_y_a, self.p_a[:, None], self.p_y[None, :]).T
+        self.p_a_y = self._compute_bayes_theorem(self.p_y_a, self.p_a[:, None], self.p_y[None, :]).T
 
         if seed is not None:
             torch.manual_seed(seed)
@@ -61,7 +57,11 @@ class BiasInjector(Dataset):
         self._load_and_stack_images()
         self._apply_bias_to_images()
 
-    def _prepare_priors(self, p_y_a, p_a):
+    @abstractmethod
+    def bias_fn(self, img: Tensor, a: int) -> Tensor:
+        return torch.zeros_like(img)
+
+    def _prepare_priors(self, p_y_a: Tensor | list[list[float]], p_a: Tensor | list[float]):
         """
         Validate and store prior P(A) and conditional P(Y|A).
 
@@ -87,11 +87,11 @@ class BiasInjector(Dataset):
         ------
         AssertionError if labels are out of range [0, C-1].
         """
-        self.n = len(self.base)
+        self.n = len(cast(Sized, self.base))
         if hasattr(self.base, "targets"):
-            y = torch.as_tensor(self.base.targets, dtype=torch.long, device=self.device)
+            y = torch.as_tensor(cast(Any, self.base).targets, dtype=torch.long, device=self.device)
         elif hasattr(self.base, "labels"):
-            y = torch.as_tensor(self.base.labels, dtype=torch.long, device=self.device)
+            y = torch.as_tensor(cast(Any, self.base).labels, dtype=torch.long, device=self.device)
         else:
             y = torch.tensor([self.base[i][1] for i in range(self.n)], dtype=torch.long, device=self.device)
         assert y.min() >= 0 and y.max() < self.C, "labels out of range"
@@ -103,6 +103,20 @@ class BiasInjector(Dataset):
         """
         counts = torch.bincount(self.y, minlength=self.C).float()
         self.p_y = counts / self.n  # shape (C,)
+
+    def _compute_bayes_theorem(self, likelihood: Tensor | float, prior: Tensor | float, evidence: Tensor | float) -> Tensor:
+        """
+        Computes the posterior probability P(A|Y) using Bayes' theorem.
+
+        Args:
+            likelihood (Tensor or float): P(Y|A).
+            prior (Tensor or float): P(A).
+            evidence (Tensor or float): P(Y).
+
+        Returns:
+            Tensor or float: Posterior probability P(A|Y).
+        """
+        return torch.as_tensor((likelihood * prior) / evidence)
 
     def _assign_attributes(self):
         """
@@ -137,7 +151,7 @@ class BiasInjector(Dataset):
                     x_biased[i] = self.bias_fn(self.x[i], j)
         self.x = x_biased
 
-    def __getitem__(self, idx):
+    def __getitem__(self, idx: int | list[int] | Tensor) -> tuple[Tensor, Tensor, Tensor]:
         """
         Retrieve the biased sample.
 

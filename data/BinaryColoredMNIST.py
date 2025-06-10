@@ -1,10 +1,10 @@
 import torch
-
+from torch import Tensor
 from torchvision import datasets, transforms
 from torch.utils.data import Dataset
 
 
-def _compute_bayes_theorem(likelihood, prior, evidence):
+def _compute_bayes_theorem(likelihood: Tensor | float, prior: Tensor | float, evidence: Tensor | float) -> Tensor | float:
     """
     Computes the posterior probability P(A|Y) using Bayes' theorem.
 
