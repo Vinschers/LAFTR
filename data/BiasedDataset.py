@@ -75,9 +75,10 @@ class BiasedDataset(Dataset, ABC):
         self.K = self.p_a.size(0)
 
         assert self.p_y_a.shape == (self.K, self.C), f"p_y_a must be (K={self.K}, C={self.C})"
-        assert torch.allclose(self.p_y_a.sum(dim=1), torch.ones(self.K, device=self.device)), "Each row of p_y_a must sum to 1"
         assert self.p_a.shape == (self.K,), f"p_a must be length K={self.K}"
-        assert torch.isclose(self.p_a.sum(), torch.tensor(1.0, device=self.device)), "p_a must sum to 1"
+
+        self.p_y_a /= self.p_y_a.sum(dim=1, keepdim=True)
+        self.p_a /= self.p_a.sum()
 
     def _extract_labels(self):
         """

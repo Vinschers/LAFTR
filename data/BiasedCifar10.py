@@ -6,25 +6,27 @@ from . import BiasedDataset
 
 
 class BiasedCifar10(BiasedDataset):
-    COLORS = [
-        [1.0, 0.0, 0.0],  # red
-        [0.0, 1.0, 0.0],  # green
-        [0.0, 0.0, 1.0],  # blue
-        [1.0, 1.0, 0.0],  # yellow
-        [1.0, 0.0, 1.0],  # magenta
-        [0.0, 1.0, 1.0],  # cyan
-        [1.0, 0.5, 0.0],  # orange
-        [0.5, 0.0, 0.5],  # purple
-        [0.6, 0.4, 0.2],  # brown
-        [1.0, 0.75, 0.8],  # pink
-    ]
+    COLORS = Tensor(
+        [
+            [1.0, 0.0, 0.0],  # red
+            [0.0, 1.0, 0.0],  # green
+            [0.0, 0.0, 1.0],  # blue
+            [1.0, 1.0, 0.0],  # yellow
+            [1.0, 0.0, 1.0],  # magenta
+            [0.0, 1.0, 1.0],  # cyan
+            [1.0, 0.5, 0.0],  # orange
+            [0.5, 0.0, 0.5],  # purple
+            [0.6, 0.4, 0.2],  # brown
+            [1.0, 0.75, 0.8],  # pink
+        ]
+    )
 
     def __init__(
         self,
         root: str,
         p_y_a: Tensor | list[list[float]],
         p_a: Tensor | list[float],
-        train: bool,
+        train: bool = False,
         download: bool = False,
         seed: int | None = None,
         device: torch.device = torch.device("cpu"),
@@ -32,25 +34,16 @@ class BiasedCifar10(BiasedDataset):
         transform = transforms.ToTensor()
         base = datasets.CIFAR10(root, train=train, transform=transform, download=download)
 
+        self.square_size = 5
+        self.square_position = (1, 1)
+
         super().__init__(base, 10, p_y_a, p_a, seed, device)
 
-        self.colors = [torch.tensor(c, dtype=torch.float32).view(3, 1, 1) for c in self.COLORS]
-        self.square_size = 5
-        self.square_position = (3, 3)
-
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
-        single = img.dim() == 3
-
-        if single:
-            img = img.unsqueeze(0)
-
-        color = self.colors[a].to(img.device).view(1, 3, 1, 1)
+        color = self.COLORS[a].to(self.device).view(1, 3, 1, 1)
         r0, c0 = self.square_position
         s = self.square_size
 
         img[..., r0 : r0 + s, c0 : c0 + s] = color
-
-        if single:
-            img = img.squeeze(0)
 
         return img
