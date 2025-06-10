@@ -167,18 +167,15 @@ class Trainer:
         self._reset_models()
 
         for e in range(epochs):
-            loss_enc_class, loss_adv = self._train_epoch()
+            loss_enc_class, loss_adv = self._train_epoch(e, verbose)
 
             self.losses_enc_class.append(loss_enc_class)
             self.losses_adv.append(loss_adv)
 
-            if verbose:
-                print(f"Epoch {e + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
-
         self._set_mode(train_encoder=False, train_classifier=False, train_adversary=False)
         return self.losses_enc_class, self.losses_adv
 
-    def _train_epoch(self):
+    def _train_epoch(self, epoch: int = 0, verbose: bool = False):
         """
         Run one training epoch: update encoder+classifier and adversary networks on all minibatches.
 
@@ -191,7 +188,7 @@ class Trainer:
         loss_adv_total = 0
         n = 0
 
-        loader = tqdm(self.train_loader, unit="batch", leave=False)
+        loader = tqdm(self.train_loader, unit="batch", leave=False) if verbose else self.train_loader
 
         for x, a_true, y_true in loader:
             batch_size = x.size(0)
@@ -208,7 +205,13 @@ class Trainer:
 
             n += batch_size
 
-        return loss_enc_class_total / n, loss_adv_total / n
+        loss_enc_class = loss_enc_class_total / n
+        loss_adv = loss_adv_total / n
+
+        if verbose:
+            print(f"Epoch {epoch + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+
+        return loss_enc_class, loss_adv
 
     def _train_enc_class(self, x: Tensor, a_true: Tensor, y_true: Tensor):
         """
