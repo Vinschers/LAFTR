@@ -35,7 +35,6 @@ class BiasedDataset(Dataset, ABC):
         base_dataset: Dataset,
         C: int,
         p_y_a: Tensor | list[list[float]],
-        p_a: Tensor | list[float],
         seed: int | None = None,
         device: torch.device = torch.device("cpu"),
     ):
@@ -44,9 +43,8 @@ class BiasedDataset(Dataset, ABC):
         self.C = C
         self.device = device
 
-        self._prepare_priors(p_y_a, p_a)
+        self._prepare_priors(p_y_a)
         self._extract_labels()
-        self._compute_p_y()
 
         self.p_a_y = self._compute_bayes_theorem(self.p_y_a, self.p_a[:, None], self.p_y[None, :]).T
 
@@ -61,7 +59,7 @@ class BiasedDataset(Dataset, ABC):
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
         return torch.zeros_like(img)
 
-    def _prepare_priors(self, p_y_a: Tensor | list[list[float]], p_a: Tensor | list[float]):
+    def _prepare_priors(self, p_y_a: Tensor | list[list[float]]):
         """
         Validate and store prior P(A) and conditional P(Y|A).
 
@@ -71,7 +69,12 @@ class BiasedDataset(Dataset, ABC):
         p_a   : array-like, shape (K,)
         """
         self.p_y_a = torch.as_tensor(p_y_a, dtype=torch.float32, device=self.device)  # (K, C)
-        self.p_a = torch.as_tensor(p_a, dtype=torch.float32, device=self.device)  # (K,)
+
+        counts = torch.bincount(self.y, minlength=self.C).float()
+        self.p_y = counts / self.n  # shape (C,)
+
+        self.p_a = torch.pinverse(self.p_y_a) @ self.p_y
+
         self.K = self.p_a.size(0)
 
         assert self.p_y_a.shape == (self.K, self.C), f"p_y_a must be (K={self.K}, C={self.C})"
@@ -97,13 +100,6 @@ class BiasedDataset(Dataset, ABC):
             y = torch.tensor([self.base[i][1] for i in range(self.n)], dtype=torch.long, device=self.device)
         assert y.min() >= 0 and y.max() < self.C, "labels out of range"
         self.y = y
-
-    def _compute_p_y(self):
-        """
-        Compute empirical marginal P(Y) from the labels.
-        """
-        counts = torch.bincount(self.y, minlength=self.C).float()
-        self.p_y = counts / self.n  # shape (C,)
 
     def _compute_bayes_theorem(self, likelihood: Tensor | float, prior: Tensor | float, evidence: Tensor | float) -> Tensor:
         """

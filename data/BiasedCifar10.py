@@ -25,7 +25,6 @@ class BiasedCifar10(BiasedDataset):
         self,
         root: str,
         p_y_a: Tensor | list[list[float]],
-        p_a: Tensor | list[float],
         train: bool = False,
         download: bool = False,
         seed: int | None = None,
@@ -37,7 +36,7 @@ class BiasedCifar10(BiasedDataset):
         self.square_size = 5
         self.square_position = (1, 1)
 
-        super().__init__(base, 10, p_y_a, p_a, seed, device)
+        super().__init__(base, 10, p_y_a, seed, device)
 
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
         color = self.COLORS[a].to(self.device).view(1, 3, 1, 1)
