@@ -14,7 +14,7 @@ class Classifier(nn.Module):
     def __init__(self, latent_dim: int = 16, hidden_dim: int = 64, C: int = 2):
         super().__init__()
 
-        self.net = nn.Linear(latent_dim, 1) # A single linear layer, no hidden layers or ReLU
+        self.net = nn.Linear(latent_dim, C) # A single linear layer, no hidden layers or ReLU
 
     def forward(self, z):
         return self.net(z)
