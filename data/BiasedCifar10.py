@@ -39,7 +39,7 @@ class BiasedCifar10(BiasedDataset):
         super().__init__(base, 10, p_y_a, seed, device)
 
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
-        color = self.COLORS[a].to(self.device).view(1, 3, 1, 1)
+        color = self.COLORS[a].to(self._device).view(1, 3, 1, 1)
         r0, c0 = self.square_position
         s = self.square_size
 
