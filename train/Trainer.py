@@ -1,4 +1,4 @@
-from typing import Union, Sequence
+from typing import Sequence
 
 import torch
 from torch import Tensor
@@ -42,7 +42,7 @@ class Trainer:
         val_loader: DataLoader,
         encoder: Module,
         classifier: Module,
-        adversary: Union[Module, ModuleList],
+        adversary: Module | ModuleList,
         C: int = 2,
         K: int = 2,
         device: torch.device = torch.device("cpu"),
@@ -69,18 +69,18 @@ class Trainer:
         device : torch.device, default=torch.device("cpu")
             Device on which to run the encoder, classifier, and adversary networks.
         """
-        self.C = C
-        self.K = K
-        self.device = device
+        self._C = C
+        self._K = K
+        self._device = device
 
-        self.dp = not isinstance(adversary, ModuleList)
+        self._dp = not isinstance(adversary, ModuleList)
 
-        self.train_loader = train_loader
-        self.val_loader = val_loader
+        self._train_loader = train_loader
+        self._val_loader = val_loader
 
-        self.encoder = encoder.to(self.device)
-        self.classifier = classifier.to(self.device)
-        self.adversary = adversary.to(self.device)
+        self.encoder = encoder.to(self._device)
+        self.classifier = classifier.to(self._device)
+        self.adversary = adversary.to(self._device)
 
     def pred_adversary(self, z: Tensor, y_true: Tensor):
         """
@@ -101,12 +101,12 @@ class Trainer:
         """
         batch_size = z.size(0)
 
-        a_pred = torch.zeros(batch_size, self.K, device=self.device)
+        a_pred = torch.zeros(batch_size, self._K, device=self._device)
 
-        if self.dp:
+        if self._dp:
             a_pred = self.adversary(z)
         else:
-            for y in range(self.C):
+            for y in range(self._C):
                 mask_y = y_true == y
 
                 if mask_y.any():
@@ -123,7 +123,7 @@ class Trainer:
         self,
         criterion_classifier: Module,
         optimizer_enc_class: Optimizer,
-        optimizer_adv: Union[Optimizer, Sequence[Optimizer]],
+        optimizer_adv: Optimizer | Sequence[Optimizer],
         gamma: float = 1e-4,
         epochs: int = 12,
         verbose: bool = False,
@@ -154,31 +154,28 @@ class Trainer:
             - losses_enc_class[e]: encoder+classifier loss averaged over epoch e.
             - losses_adv[e]: adversary loss (sum over classes or DP) averaged over epoch e.
         """
-        self.criterion_classifier = criterion_classifier
-        self.optimizer_enc_class = optimizer_enc_class
+        self._criterion_classifier = criterion_classifier
+        self._optimizer_enc_class = optimizer_enc_class
         self._check_optimizers_adv(optimizer_adv)
 
-        self.criterion_enc_class = CombinedLoss(gamma)
-        self.criterion_adv = AdversaryLoss()
+        self._criterion_enc_class = CombinedLoss(gamma)
+        self._criterion_adv = AdversaryLoss()
 
-        self.losses_enc_class = []
-        self.losses_adv = []
+        self._losses_enc_class = []
+        self._losses_adv = []
 
         self._reset_models()
 
         for e in range(epochs):
-            loss_enc_class, loss_adv = self._train_epoch()
+            loss_enc_class, loss_adv = self._train_epoch(e, verbose)
 
-            self.losses_enc_class.append(loss_enc_class)
-            self.losses_adv.append(loss_adv)
-
-            if verbose:
-                print(f"Epoch {e + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+            self._losses_enc_class.append(loss_enc_class)
+            self._losses_adv.append(loss_adv)
 
         self._set_mode(train_encoder=False, train_classifier=False, train_adversary=False)
-        return self.losses_enc_class, self.losses_adv
+        return self._losses_enc_class, self._losses_adv
 
-    def _train_epoch(self):
+    def _train_epoch(self, epoch: int = 0, verbose: bool = False):
         """
         Run one training epoch: update encoder+classifier and adversary networks on all minibatches.
 
@@ -191,14 +188,14 @@ class Trainer:
         loss_adv_total = 0
         n = 0
 
-        loader = tqdm(self.train_loader, unit="batch", leave=False)
+        loader = tqdm(self._train_loader, unit="batch", leave=False) if verbose else self._train_loader
 
         for x, a_true, y_true in loader:
             batch_size = x.size(0)
 
-            x = x.to(self.device)
-            a_true = a_true.to(self.device)
-            y_true = y_true.to(self.device)
+            x = x.to(self._device)
+            a_true = a_true.to(self._device)
+            y_true = y_true.to(self._device)
 
             loss_enc_class = self._train_enc_class(x, a_true, y_true)
             loss_adv = self._train_adversary(x, a_true, y_true)
@@ -208,7 +205,13 @@ class Trainer:
 
             n += batch_size
 
-        return loss_enc_class_total / n, loss_adv_total / n
+        loss_enc_class = loss_enc_class_total / n
+        loss_adv = loss_adv_total / n
+
+        if verbose:
+            print(f"Epoch {epoch + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+
+        return loss_enc_class, loss_adv
 
     def _train_enc_class(self, x: Tensor, a_true: Tensor, y_true: Tensor):
         """
@@ -234,14 +237,14 @@ class Trainer:
         y_pred = self.classifier(z)
 
         a_pred = self.pred_adversary(z, y_true)
-        loss_adv = self.criterion_adv(a_pred, a_true)
+        loss_adv = self._criterion_adv(a_pred, a_true)
 
-        loss_class = self.criterion_classifier(y_pred, y_true)
-        loss_enc_class = self.criterion_enc_class(loss_class, loss_adv)
+        loss_class = self._criterion_classifier(y_pred, y_true)
+        loss_enc_class = self._criterion_enc_class(loss_class, loss_adv)
 
-        self.optimizer_enc_class.zero_grad()
+        self._optimizer_enc_class.zero_grad()
         loss_enc_class.backward()
-        self.optimizer_enc_class.step()
+        self._optimizer_enc_class.step()
 
         return loss_enc_class.item()
 
@@ -270,9 +273,9 @@ class Trainer:
 
         adv_loss = 0
 
-        if self.dp:
+        if self._dp:
             a_pred = self.adversary(z)
-            adv_loss = self.criterion_adv(a_pred, a_true)
+            adv_loss = self._criterion_adv(a_pred, a_true)
 
             self.optimizer_adv.zero_grad()  # type: ignore[operator]
             adv_loss.backward()
@@ -280,7 +283,7 @@ class Trainer:
 
             adv_loss = adv_loss.item()
         else:
-            for y in range(self.C):
+            for y in range(self._C):
                 mask_y = y_true == y
 
                 if mask_y.any():
@@ -291,7 +294,7 @@ class Trainer:
                     a_y = a_true[mask_y]
 
                     a_pred = self._to_pred_matrix(adv(z_y))
-                    loss_adv_y = self.criterion_adv(a_pred, a_y)
+                    loss_adv_y = self._criterion_adv(a_pred, a_y)
 
                     optim_adv.zero_grad()
                     loss_adv_y.backward()
@@ -301,7 +304,7 @@ class Trainer:
 
         return adv_loss
 
-    def _check_optimizers_adv(self, optimizer_adv: Union[Optimizer, Sequence[Optimizer]]):
+    def _check_optimizers_adv(self, optimizer_adv: Optimizer | Sequence[Optimizer]):
         """
         Validate and store the adversary optimizer(s) based on whether DP or per-class adversaries are used.
 
@@ -316,7 +319,7 @@ class Trainer:
         AssertionError
             If `optimizer_adv` does not match the expected type/length given `self.dp`.
         """
-        if self.dp:
+        if self._dp:
             assert isinstance(
                 optimizer_adv, Optimizer
             ), "When you pass a single adversary Module, `optimizer_adv` must be a single Optimizer, not a list."
