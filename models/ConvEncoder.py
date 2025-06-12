@@ -11,7 +11,8 @@ class ConvEncoder(_BaseEncoder):
         self,
         latent_dim: int,
         image_dim: Union[int, tuple[int, int]] = 28,
-        in_channels: int = 3
+        in_channels: int = 3,
+
     ):
         """
         Implements a convolutional encoder that maps image input to a latent representation.
@@ -34,22 +35,15 @@ class ConvEncoder(_BaseEncoder):
 
         # Define the convolutional feature extractor
         self.conv = nn.Sequential(
-            nn.Conv2d(in_channels, out_channels=2, kernel_size=5),
+            nn.Conv2d(in_channels, out_channels=6, kernel_size=5),
             nn.LeakyReLU(),
             nn.MaxPool2d(kernel_size=2),
         )
 
-        # Determine the flattened output size after conv layers using a dummy input
-        dummy_input = torch.zeros(1, in_channels, h, w)
-
-        with torch.no_grad():
-            out = self.conv(dummy_input)
-            flatten_dim = out.view(1, -1).shape[1]
-
         # Compose final encoder: conv -> flatten -> linear projection to latent_dim
         second_conv = nn.Sequential(
             self.conv,
-            nn.Conv2d(2, latent_dim, kernel_size=1),
+            nn.Conv2d(6, latent_dim, kernel_size=3),
             nn.LeakyReLU(),
             nn.AdaptiveAvgPool2d((1, 1)), # Outputs a 1 x 1 x latent_dim
             nn.Flatten(),
