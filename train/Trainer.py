@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 from tqdm.notebook import tqdm
 
 from losses import CombinedLoss, AdversaryLoss
+from predict import Predictor
 
 
 class Trainer:
@@ -82,42 +83,7 @@ class Trainer:
         self.classifier = classifier.to(self._device)
         self.adversary = adversary.to(self._device)
 
-    def pred_adversary(self, z: Tensor, y_true: Tensor):
-        """
-        Compute adversary predictions either globally (DP) or per-class (EO).
-
-        Parameters
-        ----------
-        z : Tensor
-            Encoded representations of shape [batch_size, ...].
-        y_true : Tensor
-            True class labels of shape [batch_size], in {0,...,C-1}.
-
-        Returns
-        -------
-        Tensor
-            Adversary predictions of shape [batch_size, K], where K is the number
-            of sensitive-attribute categories.
-        """
-        batch_size = z.size(0)
-
-        a_pred = torch.zeros(batch_size, self._K, device=self._device)
-
-        if self._dp:
-            a_pred = self.adversary(z)
-        else:
-            for y in range(self._C):
-                mask_y = y_true == y
-
-                if mask_y.any():
-                    idx = mask_y.nonzero(as_tuple=True)[0]
-
-                    z_y = z[mask_y]
-                    adv = self.adversary[y]  # type: ignore[operator]
-
-                    a_pred[idx] = adv(z_y)
-
-        return self._to_pred_matrix(a_pred)
+        self._pred_logits_adversary = Predictor(self.adversary, self._K, self._device)
 
     def train(
         self,
@@ -172,7 +138,9 @@ class Trainer:
             self._losses_enc_class.append(loss_enc_class)
             self._losses_adv.append(loss_adv)
 
-        self._set_mode(train_encoder=False, train_classifier=False, train_adversary=False)
+        self._set_mode(
+            train_encoder=False, train_classifier=False, train_adversary=False
+        )
         return self._losses_enc_class, self._losses_adv
 
     def _train_epoch(self, epoch: int = 0, verbose: bool = False):
@@ -188,7 +156,11 @@ class Trainer:
         loss_adv_total = 0
         n = 0
 
-        loader = tqdm(self._train_loader, unit="batch", leave=False) if verbose else self._train_loader
+        loader = (
+            tqdm(self._train_loader, unit="batch", leave=False)
+            if verbose
+            else self._train_loader
+        )
 
         for x, a_true, y_true in loader:
             batch_size = x.size(0)
@@ -209,7 +181,9 @@ class Trainer:
         loss_adv = loss_adv_total / n
 
         if verbose:
-            print(f"Epoch {epoch + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})")
+            print(
+                f"Epoch {epoch + 1} (encoder+classifier loss: {loss_enc_class:.4f}, adversary loss: {loss_adv:.4f})"
+            )
 
         return loss_enc_class, loss_adv
 
@@ -236,7 +210,7 @@ class Trainer:
         z = self.encoder(x)
         y_pred = self.classifier(z)
 
-        a_pred = self.pred_adversary(z, y_true)
+        a_pred = self._pred_logits_adversary(z, y_true)
         loss_adv = self._criterion_adv(a_pred, a_true)
 
         loss_class = self._criterion_classifier(y_pred, y_true)
@@ -266,7 +240,9 @@ class Trainer:
         float
             The sum of adversary losses (mean over respective subsets) for this batch.
         """
-        self._set_mode(train_encoder=False, train_classifier=False, train_adversary=True)
+        self._set_mode(
+            train_encoder=False, train_classifier=False, train_adversary=True
+        )
 
         with torch.no_grad():
             z = self.encoder(x)
@@ -324,13 +300,17 @@ class Trainer:
                 optimizer_adv, Optimizer
             ), "When you pass a single adversary Module, `optimizer_adv` must be a single Optimizer, not a list."
         else:
-            assert isinstance(optimizer_adv, (list, tuple)) and len(optimizer_adv) == len(
+            assert isinstance(optimizer_adv, (list, tuple)) and len(
+                optimizer_adv
+            ) == len(
                 self.adversary  # type: ignore[operator]
             ), "When you pass multiple adversaries, `optimizer_adv` must be a list/tuple of optimizers of the same length."
 
         self.optimizer_adv = optimizer_adv
 
-    def _set_mode(self, train_encoder: bool, train_classifier: bool, train_adversary: bool):
+    def _set_mode(
+        self, train_encoder: bool, train_classifier: bool, train_adversary: bool
+    ):
         """
         Set training/evaluation mode for encoder, classifier, and adversary networks.
 
