@@ -37,7 +37,7 @@ class ConvEncoder(_BaseEncoder):
         self.conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels=6, kernel_size=5),
             nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2),
+            nn.MaxPool2d(kernel_size=2), # felipe was i spposed to remove this?
         )
 
         # Compose final encoder: conv -> flatten -> linear projection to latent_dim
