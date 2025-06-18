@@ -4,3 +4,4 @@ from .ConvEncoder import ConvEncoder
 
 from .Classifier import Classifier
 from .Adversary import Adversary
+from .ConvEncoderCIFAR import ConvEncoderCIFAR
