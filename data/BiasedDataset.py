@@ -79,10 +79,7 @@ class BiasedDataset(Dataset, ABC):
 
         self.p_y_a /= self.p_y_a.sum(dim=0, keepdim=True) # Normalize columns
 
-        pinv = torch.pinverse(self.p_y_a)
-        assert torch.allclose(self.p_y_a @ pinv @ self.p_y, self.p_y), "P(Y) cannot be obtained through P(Y | A)"
-
-        self.p_a = pinv @ self.p_y
+        self.p_a = torch.linalg.lstsq(self.p_y_a, self.p_y).solution
         self.p_a = torch.clamp(self.p_a, min=0)
         self.p_a /= self.p_a.sum()
 
