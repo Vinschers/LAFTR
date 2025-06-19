@@ -37,7 +37,7 @@ class ConvEncoderCIFAR(_BaseEncoder):
         for out_channel in channels:
             layers.append(nn.Conv2d(prev_channels, out_channel, kernel_size= 3, stride=2, padding=1))
             layers.append(nn.ReLU())
-            layers.append(nn.BatchNorm2d(latent_dim))
+            layers.append(nn.BatchNorm2d(out_channel))
             prev_channels = out_channel
 
         layers.append(nn.Flatten())  # final shape (B, latent_dim)

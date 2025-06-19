@@ -43,8 +43,8 @@ class BiasedDataset(Dataset, ABC):
         self._C = C
         self._device = device
 
-        self._prepare_priors(p_y_a)
         self._extract_labels()
+        self._prepare_priors(p_y_a)
 
         self._K = self.p_a.size(0)
 
