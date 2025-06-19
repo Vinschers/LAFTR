@@ -86,7 +86,8 @@ class BiasedDataset(Dataset, ABC):
         self.p_y_a /= self.p_y_a.sum(dim=0, keepdim=True) # Normalize columns
 
         self.p_a = torch.linalg.lstsq(self.p_y_a, self.p_y).solution
-        self.p_a = torch.clamp(self.p_a, min=0)
+        assert (self.p_a >= 0).all(), "P(Y) is not in the convex-hull of P(Y | A)."
+
         self.p_a /= self.p_a.sum()
 
     def _extract_labels(self):
