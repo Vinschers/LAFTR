@@ -1,5 +1,4 @@
 **/.ipynb_checkpoints/
 **/.DS_Store
 **/__pycache__/
-data/mnist_data/
-data/cifar_data/
+data/datasets/
