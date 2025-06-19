@@ -18,8 +18,8 @@ class BiasedDataset(Dataset, ABC):
         label in {0,...,C-1}.
     C : int
         Number of classes.
-    p_y_a : array-like, shape (C, K)
-        P(Y=i | A=j), for i=0..C-1 and j=0..K-1. Each column must sum to 1.
+    p_y_a : array-like, shape (K, C)
+        P(Y=i | A=j), for j=0..K-1 and i=0..C-1. Each row must sum to 1.
     p_a : array-like, shape (K,)
         Prior P(A=j). Must sum to 1.
     bias_fn : Callable[[Tensor, int], Tensor]
@@ -41,18 +41,12 @@ class BiasedDataset(Dataset, ABC):
         super().__init__()
         self._base = base_dataset
         self._C = C
-
-        if device.type == "mps":  # lstsq is not implemented for mps
-            self._device = torch.device("cpu")
-        else:
-            self._device = device
+        self._device = device
 
         self._extract_labels()
         self._prepare_priors(p_y_a)
 
-        self._K = self.p_a.size(0)
-
-        self.p_a_y = self._compute_bayes_theorem(self.p_y_a.T, self.p_a[:, None], self.p_y[None, :])
+        self.p_a_y = self._compute_bayes_theorem(self.p_y_a, self.p_a[:, None], self.p_y[None, :]).T
 
         if seed is not None:
             torch.manual_seed(seed)
@@ -60,8 +54,6 @@ class BiasedDataset(Dataset, ABC):
         self._assign_attributes()
         self._load_and_stack_images()
         self._apply_bias_to_images()
-
-        self.dataset = (self.x, self.a, self.y)
 
     @abstractmethod
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
@@ -73,7 +65,7 @@ class BiasedDataset(Dataset, ABC):
 
         Parameters
         ----------
-        p_y_a : array-like, shape (C, K)
+        p_y_a : array-like, shape (K, C)
         p_a   : array-like, shape (K,)
         """
         self.p_y_a = torch.as_tensor(p_y_a, dtype=torch.float32, device=self._device)  # (K, C)
@@ -81,13 +73,14 @@ class BiasedDataset(Dataset, ABC):
         counts = torch.bincount(self.y, minlength=self._C).float()
         self.p_y = counts / self._n  # shape (C,)
 
-        assert torch.all(self.p_y_a >= 0), "All probabilities in P(Y | A) must be non-negative."
+        self.p_a = torch.pinverse(self.p_y_a) @ self.p_y
 
-        self.p_y_a /= self.p_y_a.sum(dim=0, keepdim=True) # Normalize columns
+        self._K = self.p_a.size(0)
 
-        self.p_a = torch.linalg.lstsq(self.p_y_a, self.p_y).solution
-        assert (self.p_a >= 0).all(), "P(Y) is not in the convex-hull of P(Y | A)."
+        assert self.p_y_a.shape == (self._K, self._C), f"p_y_a must be (K={self._K}, C={self._C})"
+        assert self.p_a.shape == (self._K,), f"p_a must be length K={self._K}"
 
+        self.p_y_a /= self.p_y_a.sum(dim=1, keepdim=True)
         self.p_a /= self.p_a.sum()
 
     def _extract_labels(self):
@@ -127,7 +120,7 @@ class BiasedDataset(Dataset, ABC):
         Vectorized draw of A_i ~ P(A | Y=y_i) for each sample i.
         Stores result in self.a of shape (N,).
         """
-        probs = self.p_a_y[:, self.y].T  # (N, K)
+        probs = self.p_a_y[self.y]  # (N, K)
         self.a = torch.multinomial(probs, num_samples=1, replacement=True).squeeze(1)
 
     def _load_and_stack_images(self):
