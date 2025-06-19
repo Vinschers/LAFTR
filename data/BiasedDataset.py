@@ -41,7 +41,11 @@ class BiasedDataset(Dataset, ABC):
         super().__init__()
         self._base = base_dataset
         self._C = C
-        self._device = device
+
+        if device.type == "mps":  # lstsq is not implemented for mps
+            self._device = torch.device("cpu")
+        else:
+            self._device = device
 
         self._extract_labels()
         self._prepare_priors(p_y_a)
@@ -56,6 +60,8 @@ class BiasedDataset(Dataset, ABC):
         self._assign_attributes()
         self._load_and_stack_images()
         self._apply_bias_to_images()
+
+        self.dataset = (self.x, self.a, self.y)
 
     @abstractmethod
     def bias_fn(self, img: Tensor, a: int) -> Tensor:
