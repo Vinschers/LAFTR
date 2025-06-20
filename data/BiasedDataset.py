@@ -61,6 +61,13 @@ class BiasedDataset(Dataset, ABC):
         self._load_and_stack_images()
         self._apply_bias_to_images()
 
+        if device.type == "mps":
+            self._device = device
+
+            self.x = self.x.to(self._device)
+            self.a = self.a.to(self._device)
+            self.y = self.y.to(self._device)
+
         self.dataset = (self.x, self.a, self.y)
 
     @abstractmethod
