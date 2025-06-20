@@ -42,7 +42,7 @@ class BiasedDataset(Dataset, ABC):
         self._base = base_dataset
         self._C = C
 
-        if device.type == "mps":  # lstsq is not implemented for mps
+        if device.type == "mps":
             self._device = torch.device("cpu")
         else:
             self._device = device
@@ -51,7 +51,6 @@ class BiasedDataset(Dataset, ABC):
         self._prepare_priors(p_y_a)
 
         self._K = self.p_a.size(0)
-
         self.p_a_y = self._compute_bayes_theorem(self.p_y_a.T, self.p_a[:, None], self.p_y[None, :])
 
         if seed is not None:
@@ -89,8 +88,7 @@ class BiasedDataset(Dataset, ABC):
         self.p_y = counts / self._n  # shape (C,)
 
         assert torch.all(self.p_y_a >= 0), "All probabilities in P(Y | A) must be non-negative."
-
-        self.p_y_a /= self.p_y_a.sum(dim=0, keepdim=True) # Normalize columns
+        self.p_y_a /= self.p_y_a.sum(dim=0, keepdim=True)  # Normalize columns
 
         self.p_a = torch.linalg.lstsq(self.p_y_a, self.p_y).solution
         assert (self.p_a >= 0).all(), "P(Y) is not in the convex-hull of P(Y | A)."

@@ -20,8 +20,6 @@ class Trainer:
     ----------
     train_loader : DataLoader
         DataLoader yielding training batches of (x, a_true, y_true).
-    val_loader : DataLoader
-        DataLoader yielding validation batches of (x, a_true, y_true).
     encoder : Module
         Neural network mapping x -> z (representation).
     classifier : Module
@@ -40,7 +38,6 @@ class Trainer:
     def __init__(
         self,
         train_loader: DataLoader,
-        val_loader: DataLoader,
         encoder: Module,
         classifier: Module,
         adversary: Module | ModuleList,
@@ -55,8 +52,6 @@ class Trainer:
         ----------
         train_loader : DataLoader
             DataLoader yielding training batches of (x, a_true, y_true).
-        val_loader : DataLoader
-            DataLoader yielding validation batches of (x, a_true, y_true).
         encoder : Module
             Neural network mapping x -> z (representation).
         classifier : Module
@@ -77,7 +72,6 @@ class Trainer:
         self._dp = not isinstance(adversary, ModuleList)
 
         self._train_loader = train_loader
-        self._val_loader = val_loader
 
         self.encoder = encoder.to(self._device)
         self.classifier = classifier.to(self._device)
