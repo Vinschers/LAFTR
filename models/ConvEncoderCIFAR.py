@@ -12,7 +12,7 @@ class ConvEncoderCIFAR(_BaseEncoder):
         in_channels: int = 3,
     ):
         """
-        Implements convolutional encoder for CIFAR10 images with 5 layers and batch norm.
+        Implements convolutional encoder for CIFAR10 images with 5 layers with stride downsampling and batch norm.
 
         Args:
             latent_dim (int): Dimension of the output latent space.
