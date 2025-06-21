@@ -33,19 +33,13 @@ class ConvEncoder(_BaseEncoder):
                 "image_dim must be an int or a tuple of two ints (height, width)"
             )
 
-        # Define the convolutional feature extractor
-        self.conv = nn.Sequential(
+        conv = nn.Sequential(
             nn.Conv2d(in_channels, out_channels=6, kernel_size=5),
             nn.LeakyReLU(),
-            nn.MaxPool2d(kernel_size=2), # felipe was i spposed to remove this?
-        )
-
-        # Compose final encoder: conv -> flatten -> linear projection to latent_dim
-        second_conv = nn.Sequential(
-            self.conv,
+            nn.MaxPool2d(kernel_size=2), 
             nn.Conv2d(6, latent_dim, kernel_size=3),
             nn.LeakyReLU(),
             nn.AdaptiveAvgPool2d((1, 1)), # Outputs a 1 x 1 x latent_dim
             nn.Flatten(),
         )
-        self.net = second_conv
+        self.net = conv
