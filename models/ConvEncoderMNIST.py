@@ -5,7 +5,7 @@ import torch.nn as nn
 from ._BaseEncoder import _BaseEncoder
 
 
-class ConvEncoder(_BaseEncoder):
+class ConvEncoderMNIST(_BaseEncoder):
 
     def _set_net(
         self,
