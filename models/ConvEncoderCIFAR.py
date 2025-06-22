@@ -31,7 +31,7 @@ class ConvEncoderCIFAR(_BaseEncoder):
             )
 
         layers = []
-        channels = [32, 64, 128, 256, latent_dim]
+        channels = [8, 16, 32, 64, latent_dim]
         prev_channels = in_channels
 
         for out_channel in channels:

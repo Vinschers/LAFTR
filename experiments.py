@@ -18,16 +18,16 @@ from models import MLPEncoder, ConvEncoder, ConvEncoderCIFAR, Classifier, Advers
 from train import Trainer
 
 
-def run_experiments(C: int, K: int, bias=0., encoder_type='MLP', dataset_name='MNIST', gammas=[], device: torch.device = torch.device("cpu") ):
+def run_experiments(C: int, K: int, bias=0.0, encoder_type="MLP", dataset_name="MNIST", gammas=[], device: torch.device = torch.device("cpu")):
 
     # Creates Biased Data
     train_set, test_set_same_bias, test_set_no_bias, test_set_modified_bias = (
         create_datasets(C, K, bias=bias, dataset_name=dataset_name, device=device)
     )
 
-    # set training for DP  
+    # set training for DP
     latent_dim = 24
-    batch_size = 256
+    batch_size = 1 << 12
     learning_rate = 1e-3
     epochs = 10
 
@@ -53,34 +53,26 @@ def run_experiments(C: int, K: int, bias=0., encoder_type='MLP', dataset_name='M
     for idx, gamma in enumerate(gammas):
         # DP
         _, _ = trainer_dp.train(criterion_class, optimizer_enc_class, optimizer_adv_dp, gamma, epochs, verbose=False)
-        result_dp = run_scenarios(adversary_dp, classifier, encoder, K, C,
-                                  test_set_same_bias, test_set_no_bias, test_set_modified_bias)  
-        results_matrix[0, :, idx, :] = result_dp[:, 0, :]  
-        print(f'Trained LAFTR on DP : {idx+1}/{len(gammas)}.')
+        result_dp = run_scenarios(adversary_dp, classifier, encoder, K, C, test_set_same_bias, test_set_no_bias, test_set_modified_bias)
+        results_matrix[0, :, idx, :] = result_dp[:, 0, :]
+        print(f"Trained LAFTR on DP : {idx+1}/{len(gammas)}.")
 
-        # EO 
+        # EO
         _, _ = trainer_eo.train(criterion_class, optimizer_enc_class, optimizer_adv_eo, gamma, epochs, verbose=False)
-        result_eo = run_scenarios(adversary_eo, classifier, encoder, K, C,
-                                  test_set_same_bias, test_set_no_bias, test_set_modified_bias)  
+        result_eo = run_scenarios(adversary_eo, classifier, encoder, K, C, test_set_same_bias, test_set_no_bias, test_set_modified_bias)
         results_matrix[1, :, idx, :] = result_eo[:, 0, :]
-        print(f'Trained LAFTR on EO : {idx+1}/{len(gammas)}.')
+        print(f"Trained LAFTR on EO : {idx+1}/{len(gammas)}.")
 
+    # plot_results(results_matrix, bias, gammas)
 
-    plot_results(results_matrix, bias, gammas)
-
+    return results_matrix
 
 
 def run_scenarios(adversary, classifier, encoder, K, C, test_set_same_bias, test_set_no_bias, test_set_modified_bias):
 
-    y_true_sb, y_pred_sb, a_true_sb, a_pred_sb = run_tests(
-    adversary, classifier, encoder, K, C, test_set_same_bias
-    )
-    y_true_nb, y_pred_nb, a_true_nb, a_pred_nb = run_tests(
-        adversary, classifier, encoder, K, C, test_set_no_bias
-    )
-    y_true_mb, y_pred_mb, a_true_mb, a_pred_mb = run_tests(
-        adversary, classifier, encoder, K, C, test_set_modified_bias
-    )
+    y_true_sb, y_pred_sb, a_true_sb, a_pred_sb = run_tests(adversary, classifier, encoder, K, C, test_set_same_bias)
+    y_true_nb, y_pred_nb, a_true_nb, a_pred_nb = run_tests(adversary, classifier, encoder, K, C, test_set_no_bias)
+    y_true_mb, y_pred_mb, a_true_mb, a_pred_mb = run_tests(adversary, classifier, encoder, K, C, test_set_modified_bias)
 
     classifier_acc_sb = compute_accuracy(y_true_sb, y_pred_sb)
     adv_acc_sb = compute_accuracy(a_true_sb, a_pred_sb)
@@ -91,13 +83,9 @@ def run_scenarios(adversary, classifier, encoder, K, C, test_set_same_bias, test
     classifier_acc_mb = compute_accuracy(y_true_mb, y_pred_mb)
     adv_acc_mb = compute_accuracy(a_true_mb, a_pred_mb)
 
-    matrix = np.array([
-        [[classifier_acc_sb, adv_acc_sb]],
-        [[classifier_acc_nb, adv_acc_nb]],
-        [[classifier_acc_mb, adv_acc_mb]]
-    ])
+    matrix = np.array([[[classifier_acc_sb, adv_acc_sb]], [[classifier_acc_nb, adv_acc_nb]], [[classifier_acc_mb, adv_acc_mb]]])
 
-    return matrix 
+    return matrix
 
 
 def create_datasets(
@@ -116,25 +104,15 @@ def create_datasets(
 
     if dataset_name.upper() == "MNIST":
         train_set = BiasedBinaryMNIST(data_dir, p_y_a, train=True, device=device)
-        test_set_same_bias = BiasedBinaryMNIST(
-            data_dir, p_y_a, train=False, device=device
-        )
-        test_set_no_bias = BiasedBinaryMNIST(
-            data_dir, p_y_a_no_bias, train=False, device=device
-        )
-        test_set_modified_bias = BiasedBinaryMNIST(
-            data_dir, p_y_a_modified, train=False, device=device
-        )
+        test_set_same_bias = BiasedBinaryMNIST(data_dir, p_y_a, train=False, device=device)
+        test_set_no_bias = BiasedBinaryMNIST(data_dir, p_y_a_no_bias, train=False, device=device)
+        test_set_modified_bias = BiasedBinaryMNIST(data_dir, p_y_a_modified, train=False, device=device)
 
     elif dataset_name.upper() == "CIFAR10":
         train_set = BiasedCifar10(data_dir, p_y_a, train=True, device=device)
         test_set_same_bias = BiasedCifar10(data_dir, p_y_a, train=False, device=device)
-        test_set_no_bias = BiasedCifar10(
-            data_dir, p_y_a_no_bias, train=False, device=device
-        )
-        test_set_modified_bias = BiasedCifar10(
-            data_dir, p_y_a_modified, train=False, device=device
-        )
+        test_set_no_bias = BiasedCifar10(data_dir, p_y_a_no_bias, train=False, device=device)
+        test_set_modified_bias = BiasedCifar10(data_dir, p_y_a_modified, train=False, device=device)
 
     else:
         print("Invalid dataset_name at create_dataset.")
@@ -151,7 +129,7 @@ def run_tests(adversary, classifier, encoder, K, C, test_set):
     x, a_true, y_true = test_set[:]
 
     x = x.to(device)
-    y_true = y_true.to(device)  
+    y_true = y_true.to(device)
 
     z = encoder(x)
 
@@ -161,37 +139,45 @@ def run_tests(adversary, classifier, encoder, K, C, test_set):
     return y_true, y_pred, a_true, a_pred
 
 
-def plot_results(results_matrix, bias, list_gammas):
+def plot_results(results_matrix, list_gammas, K, baseline_acc):
     """
-    Plots classifier and adversary accuracy curves from a results matrix.
-
-    Parameters:
-    - results_matrix: numpy array of shape (2, 3, len(list_gammas), 2)
-    - bias: the bias value used in the experiments (for title labeling)
-    - list_gammas: list or array of gamma values used in experiments
+    Simple 2×2 grid: Encoders vs Adversaries × DP vs EO.
+    Drops γ=0 (log scale can’t show zero), plots plain log‐x, a baseline,
+    and one legend per subplot.
     """
-    fairness_modes = ["DP", "EO"]
-    test_types = [f"Bias = {bias}", "Bias = 0", "Inversed Bias"]
+    # — drop zero gamma (so log‐scale works) —
+    gammas = np.array(list_gammas)
+    mask = gammas > 0
+    gammas = gammas[mask]
+    data = results_matrix[:, :, mask, :]  # shape still (2,3,len(gammas),2)
 
-    fig, axes = plt.subplots(3, 2, figsize=(12, 10), sharex=True, sharey=True)
+    fairness = ["DP", "EO"]
+    tests = ["Bias", "Bias = 0", "Inversed Bias"]
+    models = ["Encoders", "Adversaries"]
 
-    for i in range(3):  # test types
-        for j in range(2):  # fairness modes
-            ax = axes[i, j]
-            classifier_acc = results_matrix[j, i, :, 0]
-            adversary_acc = results_matrix[j, i, :, 1]
-            ax.plot(list_gammas, classifier_acc, label="Classifier", color="darkblue")
-            ax.plot(list_gammas, adversary_acc, label="Adversary", color="darkred")
-            ax.set_title(f"{test_types[i]} - {fairness_modes[j]}")
-            ax.set_xticks(list_gammas)
-            if i == 2:
-                ax.set_xlabel("Gamma")
-            if j == 0:
-                ax.set_ylabel("Accuracy")
+    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
+
+    # Loop over columns (DP/EO) and rows (Encoder/Adv)
+    for col in range(2):
+        for row in range(2):
+            ax = axes[row, col]
+            for t_idx, label in enumerate(tests):
+                y = data[col, t_idx, :, row]  # row=0→encoder,1→adv
+                ax.plot(gammas, y, label=label)
+            if row == 0:
+                # only on encoder row
+                ax.axhline(baseline_acc, ls="--", color="gray", label="Baseline")
+            else:
+                ax.axhline(1 / K, ls="--", color="gray", label="Baseline")
+            ax.set_xscale("log")
+            ax.set_title(f"{models[row]} – {fairness[col]}")
+            ax.set_xlabel("Gamma")
+            ax.set_ylabel("Accuracy")
+            ax.set_ylim([0, 1])
             ax.legend()
+            ax.grid(True)
 
-    fig.suptitle(f"Experiment Results (Bias = {bias})", fontsize=16)
-    fig.tight_layout(rect=[0, 0.03, 1, 0.95])
+    plt.tight_layout()
     plt.show()
 
 
