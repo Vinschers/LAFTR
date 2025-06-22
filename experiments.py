@@ -22,7 +22,7 @@ def run_experiments(C: int, K: int, bias=0., encoder_type='MLP', dataset_name='M
 
     # Creates Biased Data
     train_set, test_set_same_bias, test_set_no_bias, test_set_modified_bias = (
-        create_datasets(C, K, bias=bias, dataset_name=dataset_name)
+        create_datasets(C, K, bias=bias, dataset_name=dataset_name, device=device)
     )
 
     # set training for DP  
