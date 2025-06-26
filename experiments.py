@@ -21,7 +21,9 @@ from train import Trainer
 def run_experiments(C: int, K: int, bias=0.0, encoder_type="MLP", dataset_name="MNIST", gammas=[], device: torch.device = torch.device("cpu")):
 
     # Creates Biased Data
-    train_set, test_set_same_bias, test_set_no_bias, test_set_modified_bias = create_datasets(C, K, bias=bias, dataset_name=dataset_name)
+    train_set, test_set_same_bias, test_set_no_bias, test_set_modified_bias = (
+        create_datasets(C, K, bias=bias, dataset_name=dataset_name, device=device)
+    )
 
     # set training for DP
     latent_dim = 24
