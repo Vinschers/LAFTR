@@ -1,9 +1,6 @@
 import os
 
-from typing import Literal
-
 import numpy as np
-import matplotlib.pyplot as plt
 
 import torch
 from torch.nn import ModuleList, CrossEntropyLoss
@@ -14,7 +11,7 @@ from data import BiasedCifar10, BiasedBinaryMNIST
 
 from predict import Predictor
 from data import BiasedCifar10, BiasedBinaryMNIST
-from models import MLPEncoder, ConvEncoder, ConvEncoderCIFAR, Classifier, Adversary
+from models import MLPEncoder, ConvEncoderMNIST, ConvEncoderCIFAR, Classifier, Adversary
 from train import Trainer
 
 
@@ -62,8 +59,6 @@ def run_experiments(C: int, K: int, bias=0.0, encoder_type="MLP", dataset_name="
         result_eo = run_scenarios(adversary_eo, classifier, encoder, K, C, test_set_same_bias, test_set_no_bias, test_set_modified_bias)
         results_matrix[1, :, idx, :] = result_eo[:, 0, :]
         print(f"Trained LAFTR on EO : {idx+1}/{len(gammas)}.")
-
-    # plot_results(results_matrix, bias, gammas)
 
     return results_matrix
 
@@ -139,54 +134,12 @@ def run_tests(adversary, classifier, encoder, K, C, test_set):
     return y_true, y_pred, a_true, a_pred
 
 
-def plot_results(results_matrix, list_gammas, K, baseline_acc):
-    """
-    Simple 2×2 grid: Encoders vs Adversaries × DP vs EO.
-    Drops γ=0 (log scale can’t show zero), plots plain log‐x, a baseline,
-    and one legend per subplot.
-    """
-    # — drop zero gamma (so log‐scale works) —
-    gammas = np.array(list_gammas)
-    mask = gammas > 0
-    gammas = gammas[mask]
-    data = results_matrix[:, :, mask, :]  # shape still (2,3,len(gammas),2)
-
-    fairness = ["DP", "EO"]
-    tests = ["Bias", "Bias = 0", "Inversed Bias"]
-    models = ["Encoders", "Adversaries"]
-
-    fig, axes = plt.subplots(2, 2, figsize=(10, 8))
-
-    # Loop over columns (DP/EO) and rows (Encoder/Adv)
-    for col in range(2):
-        for row in range(2):
-            ax = axes[row, col]
-            for t_idx, label in enumerate(tests):
-                y = data[col, t_idx, :, row]  # row=0→encoder,1→adv
-                ax.plot(gammas, y, label=label)
-            if row == 0:
-                # only on encoder row
-                ax.axhline(baseline_acc, ls="--", color="gray", label="Baseline")
-            else:
-                ax.axhline(1 / K, ls="--", color="gray", label="Baseline")
-            ax.set_xscale("log")
-            ax.set_title(f"{models[row]} – {fairness[col]}")
-            ax.set_xlabel("Gamma")
-            ax.set_ylabel("Accuracy")
-            ax.set_ylim([0, 1])
-            ax.legend()
-            ax.grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-
 def set_encoder(dataset_name, encoder_type, latent_dim):
     if dataset_name.upper() == "MNIST":
         if encoder_type.upper() == "MLP":
             encoder = MLPEncoder(latent_dim)
         elif encoder_type.upper() == "CONV":
-            encoder = ConvEncoder(latent_dim)
+            encoder = ConvEncoderMNIST(latent_dim)
         else:
             print("Invalid encoder_type at set_encoder.")
             return
